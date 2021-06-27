@@ -1,8 +1,11 @@
+import random
 import chess
-import chess.engine
-import chess.pgn
+import chess.svg
+import chess.polyglot
 import collections
-from os import system
+import chess.pgn
+import chess.engine
+
 
 
 # Evaluating the board
@@ -117,58 +120,60 @@ def evaluate_board(board):
         return -eval
 
 
-def minimaxRoot(depth, game: chess.Board, isMaximisingPlayer):
-
-    newGameMoves = game.generate_legal_moves()
-    bestMove = -9999
-    bestMoveFound = chess.Move.null()
-
-    for move in newGameMoves:
-        
-        game.push(move)
-        value = minimax(depth - 1, game, -10000, 10000, not isMaximisingPlayer)
-        game.pop()
-        #print("cur move", value, move)
-        if value >= bestMove:
-            bestMove = value
-            bestMoveFound = move
-            #print("best val found", bestMove, bestMoveFound)
-    
-    return bestMoveFound
+def alphabeta(board, alpha, beta, depthleft):
+    bestscore = -9999
+    if (depthleft == 0):
+        return quiesce(board, alpha, beta)
+    for move in board.legal_moves:
+        board.push(move)
+        score = -alphabeta(board, -beta, -alpha, depthleft - 1)
+        board.pop()
+        if (score >= beta):
+            return score
+        if (score > bestscore):
+            bestscore = score
+        if (score > alpha):
+            alpha = score
+    return bestscore
 
 
-def minimax (depth, game: chess.Board, alpha, beta, isMaximisingPlayer):
-    
-    if depth == 0 or game.is_game_over():
-        return evaluate_board(game)
+def quiesce(board, alpha, beta):
+    stand_pat = evaluate_board(board)
+    if (stand_pat >= beta):
+        return beta
+    if (alpha < stand_pat):
+        alpha = stand_pat
 
-    moves = game.generate_legal_moves()
+    for move in board.legal_moves:
 
-    if (isMaximisingPlayer):
-        bestMove = -9999
-        for move in moves:
-            game.push(move)
-            bestMove = max(bestMove, minimax(depth - 1, game, alpha, beta, not isMaximisingPlayer))
-            game.pop()
-            alpha = max(alpha, bestMove)
-            if (beta <= alpha):
-                return bestMove
-            
-        return bestMove
+        if board.is_capture(move):
+            board.push(move)
+            score = -quiesce(board, -beta, -alpha)
+            board.pop()
 
-    else:
-        bestMove = 9999
-        for move in moves:
-            game.push(move)
-            bestMove = min(bestMove, minimax(depth - 1, game, alpha, beta, not isMaximisingPlayer))
-            game.pop()
-            beta = min(beta, bestMove)
-            if (beta <= alpha):
-                return bestMove
-            
-        
-        return bestMove
-    
+            if (score >= beta):
+                return beta
+            if (score > alpha):
+                alpha = score
+    return alpha
+
+
+def select_move(board, depth):
+    best_move = chess.Move.null()
+    best_value = -99999
+    alpha = -100000
+    beta = 100000
+    for move in board.legal_moves:
+        print(move)
+        board.push(move)
+        board_value = -alphabeta(board, -beta, -alpha, depth - 1)
+        if board_value > best_value:
+            best_value = board_value
+            best_move = move
+        if board_value > alpha:
+            alpha = board_value
+        board.pop()
+    return best_move
 
 
 def board_to_game(board):
@@ -192,58 +197,118 @@ def board_to_game(board):
     return game
 
 
-
 def main():
     board = chess.Board()
 
+    book_move_count = 0
 
+    engine = chess.engine.SimpleEngine.popen_uci("C:\\files\\chessEn.exe")
     playing = True
     turn = False
-
+    human = True
+    bot_white = False
 
     while playing:
-        good_move = True
-        turn = not turn
-        if turn:
-            print("white to move")
-            print(evaluate_board(board))
-        else:
-            print("black to move")
+            good_move = True
+            turn = not turn
 
-        print(board_to_game(board)) 
-
-        if not turn:
-            engine = chess.engine.SimpleEngine.popen_uci("C:\\files\\chessEn.exe")
-            engine.play(board, chess.engine.Limit(time=2.0))
-
-            if False:
-                while good_move:
-                    move = input()
-                    try:
-                        board.push_san(move)
-                    except ValueError:
-                        good_move = False
-
-                    good_move = not good_move
-        else:
-            # Ai Logic
-            best_move = minimaxRoot(4, board, True)
-            board.push(best_move)
-        _ = system("cls")
-        print(board.mirror())
-
-        if board.is_checkmate():
             if turn:
-                print("white won!")
+                print("white to move")
+                print(evaluate_board(board))
             else:
-                print("black won!")
+                print("black to move")
 
-            playing = False
+            if not human:
+                #print(board_to_game(board))
+                pass
 
-        if board.is_stalemate():
-            print("stale mate")
-            playing = False
+            if not turn:
 
+                if bot_white:
+                    if not human:
+                        engine.play(board, chess.engine.Limit(time=2.0))
+
+                    else:
+                        while good_move:
+                            move = input()
+                            try:
+                                board.push_san(move)
+                            except ValueError:
+                                good_move = False
+
+                            good_move = not good_move
+                else:
+                    # Ai Logic
+
+                    if book_move_count > 0:
+                        best_move = chess.Move.null()
+                        with chess.polyglot.open_reader("C:\\Users\\משתמש\\Documents\\projects\\ChessAi\\ChessAi\\performance.bin") as book:
+                            best_move = random.choice ([entry.move for entry in book.find_all(board)])
+
+                        book_move_count -= 1
+
+
+                    else:
+                        print("i am here!!!")
+                        best_move = select_move(board, 4)
+
+                    board.push(best_move)
+
+            else:
+                if bot_white:
+                    # Ai Logic
+
+                    if book_move_count > 0:
+                        best_move = chess.Move.null()
+                        with chess.polyglot.open_reader("performance.bin") as book:
+                            best_move = random.choice ([entry.move for entry in book.find_all(board)])
+
+                        book_move_count -= 1
+
+
+                    else:
+                        best_move = select_move(board, 4)
+
+                    board.push(best_move)
+
+                else:
+                    if not human:
+                        print("engine White")
+                        print(board.turn)
+                        engine.play(board, chess.engine.Limit(time=2.0))
+
+                    else:
+                        while good_move:
+                            move = input()
+                            try:
+                                board.push_san(move)
+                            except ValueError:
+                                good_move = False
+
+                            good_move = not good_move
+
+            #_ = system("cls")
+            if(bot_white):
+                print(board.mirror())
+            else:
+                print(board)
+
+            if board.is_checkmate():
+                if turn:
+                    print("white won!")
+                else:
+                    print("black won!")
+
+                playing = False
+
+                engine.close()
+                print(board_to_game(board))
+
+            if board.is_stalemate():
+                print("stale mate")
+                playing = False
+                engine.close()
+                print(board_to_game(board))
 
 if __name__ == "__main__":
     main()
