@@ -1,11 +1,11 @@
 import random
+from os import system
 import chess
 import chess.svg
 import chess.polyglot
 import collections
 import chess.pgn
 import chess.engine
-
 
 
 # Evaluating the board
@@ -122,8 +122,10 @@ def evaluate_board(board):
 
 def alphabeta(board, alpha, beta, depthleft):
     bestscore = -9999
+
     if (depthleft == 0):
-        return quiesce(board, alpha, beta)
+        return quiesce(board, alpha, beta, 4)
+
     for move in board.legal_moves:
         board.push(move)
         score = -alphabeta(board, -beta, -alpha, depthleft - 1)
@@ -137,18 +139,23 @@ def alphabeta(board, alpha, beta, depthleft):
     return bestscore
 
 
-def quiesce(board, alpha, beta):
+def quiesce(board, alpha, beta, depth):
     stand_pat = evaluate_board(board)
+   
     if (stand_pat >= beta):
         return beta
+
     if (alpha < stand_pat):
         alpha = stand_pat
+
+    if(depth == 0):
+        return stand_pat
 
     for move in board.legal_moves:
 
         if board.is_capture(move):
             board.push(move)
-            score = -quiesce(board, -beta, -alpha)
+            score = -quiesce(board, -beta, -alpha, depth - 1)
             board.pop()
 
             if (score >= beta):
@@ -158,12 +165,22 @@ def quiesce(board, alpha, beta):
     return alpha
 
 
+
+
+
 def select_move(board, depth):
     best_move = chess.Move.null()
     best_value = -99999
     alpha = -100000
     beta = 100000
-    for move in board.legal_moves:
+
+
+
+    moves = sorted(board.legal_moves, key=lambda x: rank_move(board, x))
+    print(board.legal_moves)
+    print(moves)
+
+    for move in moves:
         print(move)
         board.push(move)
         board_value = -alphabeta(board, -beta, -alpha, depth - 1)
@@ -173,7 +190,17 @@ def select_move(board, depth):
         if board_value > alpha:
             alpha = board_value
         board.pop()
+
+
     return best_move
+
+
+def rank_move(board: chess.Board, move):
+    if board.is_capture(move):
+        print("cap")
+        return -1
+    return 1
+
 
 
 def board_to_game(board):
@@ -200,13 +227,14 @@ def board_to_game(board):
 def main():
     board = chess.Board()
 
-    book_move_count = 0
+    book_move_count = 4
+    depth = 5
 
     engine = chess.engine.SimpleEngine.popen_uci("C:\\files\\chessEn.exe")
     playing = True
     turn = False
     human = True
-    bot_white = False
+    bot_white = True
 
     while playing:
             good_move = True
@@ -219,14 +247,15 @@ def main():
                 print("black to move")
 
             if not human:
-                #print(board_to_game(board))
-                pass
+                print(board_to_game(board))
+                
 
             if not turn:
 
                 if bot_white:
                     if not human:
-                        engine.play(board, chess.engine.Limit(time=2.0))
+                        print("engine")
+                        board.push(engine.play(board, chess.engine.Limit(time=2.0)).move)
 
                     else:
                         while good_move:
@@ -242,15 +271,17 @@ def main():
 
                     if book_move_count > 0:
                         best_move = chess.Move.null()
-                        with chess.polyglot.open_reader("C:\\Users\\משתמש\\Documents\\projects\\ChessAi\\ChessAi\\performance.bin") as book:
-                            best_move = random.choice ([entry.move for entry in book.find_all(board)])
-
+                        with chess.polyglot.open_reader("performance.bin") as book:
+                            try:
+                                best_move = random.choice ([entry.move for entry in book.find_all(board)])
+                            except:
+                                best_move = select_move(board, 4)
                         book_move_count -= 1
 
 
                     else:
                         print("i am here!!!")
-                        best_move = select_move(board, 4)
+                        best_move = select_move(board, depth)
 
                     board.push(best_move)
 
@@ -261,21 +292,24 @@ def main():
                     if book_move_count > 0:
                         best_move = chess.Move.null()
                         with chess.polyglot.open_reader("performance.bin") as book:
-                            best_move = random.choice ([entry.move for entry in book.find_all(board)])
+                            try:
+                                best_move = random.choice ([entry.move for entry in book.find_all(board)])
+                            except:
+                                best_move = select_move(board, depth)
 
                         book_move_count -= 1
 
 
                     else:
-                        best_move = select_move(board, 4)
+                        best_move = select_move(board, 3)
 
                     board.push(best_move)
 
                 else:
                     if not human:
                         print("engine White")
-                        print(board.turn)
-                        engine.play(board, chess.engine.Limit(time=2.0))
+                        
+                        board.push(engine.play(board, chess.engine.Limit(time=2.0)).move)
 
                     else:
                         while good_move:
@@ -287,8 +321,8 @@ def main():
 
                             good_move = not good_move
 
-            #_ = system("cls")
-            if(bot_white):
+            _ = system("cls")
+            if(not bot_white):
                 print(board.mirror())
             else:
                 print(board)
